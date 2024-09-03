@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use symphonia::core::{
     formats::{FormatOptions, FormatReader},
     io::MediaSourceStream,
@@ -5,20 +7,51 @@ use symphonia::core::{
     probe::Hint,
 };
 
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Mp3Decoder {
     format: Box<dyn FormatReader>,
-    default_track_id: u32,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub struct Mp3Packet {
+    /// The packet data in MP3 format.
+    #[allow(dead_code)]
+    data: Vec<u8>,
+    /// The duration of the packet in seconds.
+    #[allow(dead_code)]
+    duration: f64,
+    /// The timestamp of the packet in seconds.
+    #[allow(dead_code)]
+    timestamp: f64,
+}
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl Mp3Packet {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(getter))]
+    pub fn data(&self) -> Vec<u8> {
+        self.data.clone()
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(getter))]
+    pub fn duration(&self) -> f64 {
+        self.duration
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(getter))]
+    pub fn timestamp(&self) -> f64 {
+        self.timestamp
+    }
+}
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Mp3Decoder {
     /// Create a new MP3 decoder.
     ///
     /// Will probe the media source stream to determine the format of the data.
-    #[wasm_bindgen(constructor)]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
     pub fn new(data: Vec<u8>) -> Self {
         let cursor = std::io::Cursor::new(data);
 
@@ -38,20 +71,22 @@ impl Mp3Decoder {
             .format(&hint, mss, &format_opts, &metadata_opts)
             .unwrap();
 
-        let format = probed.format;
-        // Get the default track.
-        let track_id = format.default_track().unwrap().id;
-
         Self {
             // Get the format reader yielded by the probe operation.
-            format,
-            default_track_id: track_id,
+            format: probed.format,
         }
     }
 
     /// Demux an MP3 file into packets.
-    #[wasm_bindgen(js_name = decodeNextPacket)]
-    pub fn decode_mp3_to_packets(&mut self) -> Option<Vec<u8>> {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = decodeNextPacket))]
+    pub fn decode_mp3_to_packets(&mut self) -> Option<Mp3Packet> {
+        let default_track = self.format.default_track().unwrap();
+        let time_base = default_track
+            .codec_params
+            .time_base
+            .unwrap_or_else(Default::default);
+        let default_track_id = default_track.id;
+
         loop {
             // Get the next packet from the format reader.
             let packet = self.format.next_packet();
@@ -60,11 +95,21 @@ impl Mp3Decoder {
             };
 
             // If the packet does not belong to the selected track, skip it.
-            if packet.track_id() != self.default_track_id {
+            if packet.track_id() != default_track_id {
                 continue;
             }
 
-            return Some(packet.data.to_vec());
+            let duration = time_base.calc_time(packet.dur);
+            let duration = duration.seconds as f64 + duration.frac;
+
+            let timestamp = time_base.calc_time(packet.ts);
+            let timestamp = timestamp.seconds as f64 + timestamp.frac;
+
+            return Some(Mp3Packet {
+                data: packet.data.to_vec(),
+                duration,
+                timestamp,
+            });
         }
     }
 }
