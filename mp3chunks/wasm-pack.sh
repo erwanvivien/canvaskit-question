@@ -11,7 +11,8 @@ OUTPUT_DIR="pkg"
 cargo +nightly build ${CARGO_MODE} \
     --target wasm32-unknown-unknown \
     -Z "build-std=std,panic_abort" \
-    -Z "build-std-features=${BUILD_STD_FEATURES}" && \
+    -Z "build-std-features=${BUILD_STD_FEATURES}" \
+    --features wasm && \
 
 wasm-bindgen \
     --out-dir ${OUTPUT_DIR} \

@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 symphonia = { version = "0.5.4", features = ["mp1", "mp2", "mp3"] }
-wasm-bindgen = "0.2.87"
+wasm-bindgen = { version =  "0.2.87", optional = true }
 
 [profile.release]
 debug = false
@@ -21,3 +21,6 @@ strip = "debuginfo"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz"]
+
+[features]
+wasm = ["wasm-bindgen"]
