@@ -1,31 +1,24 @@
 import "./style.css";
 
-import init, { Mp3Decoder, Mp3Packet } from "../mp3chunks/pkg/mp3chunks";
-import { createMp3 } from "./mp3";
 import {
-  Muxer as MP4Muxer,
   ArrayBufferTarget as MP4ArrayBufferTarget,
-} from "../mp4-muxer/src/index";
+  Muxer as MP4Muxer,
+} from "mp4-muxer";
 
-const main = async () => {
-  await init();
+// The file contains your MP3 chunks
+import packets from "./mp3chunk.json";
 
-  const audio = await fetch("/audio.wav");
-  const bytes = await audio.arrayBuffer();
-  const mp3 = await createMp3(bytes);
-
-  const decoder = new Mp3Decoder(mp3);
-
-  const packets: Mp3Packet[] = [];
-  while (true) {
-    const packet = decoder.decodeNextPacket();
-    if (packet === undefined) {
-      break;
-    }
-
-    packets.push(packet);
+const base64toUint8Array = (base64: string): Uint8Array => {
+  const binaryString = window.atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
 
+  return bytes;
+};
+
+const main = async () => {
   const target = new MP4ArrayBufferTarget();
   const mp4muxer = new MP4Muxer({
     target,
@@ -42,7 +35,7 @@ const main = async () => {
   for (const packet of packets) {
     const encodedAudioChunk = new EncodedAudioChunk({
       type: isFirst ? "key" : "delta",
-      data: packet.data,
+      data: base64toUint8Array(packet.data),
       duration: Number(packet.duration) * 1e6,
       timestamp: Number(packet.timestamp) * 1e6,
     });
